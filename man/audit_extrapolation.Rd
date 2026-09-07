@@ -53,8 +53,10 @@ administratively truncated data, and computes:
 difference (at \code{horizon}) between full-data and truncated-refit
 fits. Yellow at \code{>= config$rho_yellow} (default 0.10).
 \item \strong{rho maturity}: \eqn{(E[S] - RMST_{cutoff}) / E[S]} from the
-best-AIC model, the share of expected survival contributed by the
-unobserved tail. Yellow at 0.20, red at 0.50 (defaults).
+best-AIC model, where \eqn{E[S]} is the decision-window RMST at
+\code{horizon}: the share of decision-window restricted mean survival
+contributed by the unobserved tail. Yellow at 0.20, red at 0.50
+(defaults).
 \item \strong{model disagreement}: relative spread of decision-window
 RMST across the three candidates; exceeding
 \code{config$disagreement_escalate} escalates the flag one level.

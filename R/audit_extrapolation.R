@@ -98,8 +98,10 @@
 #'     difference (at \code{horizon}) between full-data and truncated-refit
 #'     fits. Yellow at \code{>= config$rho_yellow} (default 0.10).
 #'   \item \strong{rho maturity}: \eqn{(E[S] - RMST_{cutoff}) / E[S]} from the
-#'     best-AIC model, the share of expected survival contributed by the
-#'     unobserved tail. Yellow at 0.20, red at 0.50 (defaults).
+#'     best-AIC model, where \eqn{E[S]} is the decision-window RMST at
+#'     \code{horizon}: the share of decision-window restricted mean survival
+#'     contributed by the unobserved tail. Yellow at 0.20, red at 0.50
+#'     (defaults).
 #'   \item \strong{model disagreement}: relative spread of decision-window
 #'     RMST across the three candidates; exceeding
 #'     \code{config$disagreement_escalate} escalates the flag one level.
@@ -157,7 +159,7 @@ audit_extrapolation <- function(data, time, event, horizon,
   best <- names(which.min(vapply(fits, .aic_of, numeric(1))))
   t_cut <- max(time_v, na.rm = TRUE)
   rmst_cut <- .rmst_of(fits[[best]], t_cut)
-  e_surv <- .rmst_of(fits[[best]], max(horizon, 5 * t_cut))
+  e_surv <- .rmst_of(fits[[best]], horizon)
   rho_maturity <- if (is.finite(e_surv) && e_surv > 0)
     max(0, (e_surv - rmst_cut) / e_surv) else NA_real_
 

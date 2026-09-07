@@ -2,7 +2,7 @@ Package: DepCensAudit
 Type: Package
 Title: Integrated Audit Framework for Censoring in Survival Data:
     Evaluation, Positivity, and Extrapolation
-Version: 0.0.2
+Version: 0.0.3
 Authors@R: person("Xinghua", "Ma", role = c("aut", "cre"),
     email = "maxh_sky@126.com",
     comment = "South China Agricultural University, Zhujiang College")
