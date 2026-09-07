@@ -39,11 +39,14 @@ detect <- function(rows) {
 }
 
 # Per-scenario sensitivity / specificity for one dimension. Errors stay in
-# the denominator as non-detections (SAP B3).
-sens_spec <- function(d, dimension = c("B", "C", "A")) {
+# the denominator as non-detections (SAP B3). Dimension "C_mat" consumes
+# det_C_mat - the E1 PRIMARY judgement statistic (SAP v1.2 blocker 5).
+sens_spec <- function(d, dimension = c("B", "C", "C_mat", "A")) {
   dimension <- match.arg(dimension)
-  det <- switch(dimension, B = d$det_B, C = d$det_C, A = d$det_A)
-  tru <- switch(dimension, B = d$truth_B, C = d$truth_C, A = d$truth_A)
+  det <- switch(dimension, B = d$det_B, C = d$det_C,
+                C_mat = d$det_C_mat, A = d$det_A)
+  tru <- switch(dimension, B = d$truth_B, C = d$truth_C,
+                C_mat = d$truth_C, A = d$truth_A)
   tp <- sum(det & tru, na.rm = TRUE);  fn <- sum(!det & tru, na.rm = TRUE)
   fp <- sum(det & !tru, na.rm = TRUE); tn <- sum(!det & !tru, na.rm = TRUE)
   data.frame(dimension = dimension,
@@ -53,22 +56,60 @@ sens_spec <- function(d, dimension = c("B", "C", "A")) {
              tp = tp, fp = fp, fn = fn, tn = tn)
 }
 
-# E2 (false-positive control): clean scene = truth_C none AND kappa == 0.
-# Criterion: pooled non-green rate over ANY dimension (root or performance
-# layer) <= 0.10, judged by an exact one-sided binomial test; execution
-# thresholds (SAP A1): pooled n = 2000 -> observed rate <= 0.0866;
-# per-cell n = 500 -> <= 0.072.
+# ---- Judgement pools (SAP v1.2, blocker 4/5): explicit scenario_id
+# whitelists so the readout has ZERO discretionary pooling. The n = 200
+# sensitivity layer (S_*) never enters any judgement pool. ----
+
+# E1 sensitivity / E2 clean scene: m0.8 x kappa 0 x 4 shapes (analytic
+# truth_C = none only at m0.8; the grid boolean truth_C does NOT encode the
+# analytic grade and must not be used for pooling).
+.pool_spec_e2 <- c("G_ph_k0.0_m0.8", "G_early_k0.0_m0.8",
+                   "G_late_k0.0_m0.8", "G_crossing_k0.0_m0.8")
+
+# E1 severe pool: main grid m0.4 x {ph, early, late} x ALL kappa
+# {0, 0.3, 0.6} (9 cells) + severe heterologous sublayer ph cells
+# (logit_dropout, comp_miscode; staggered excluded - effective maturity
+# between m0.6 and m0.8). n = 11 cells x 500 = 5500.
+.pool_severe <- c(
+  outer(c("ph", "early", "late"), c("0.0", "0.3", "0.6"),
+        function(sh, k) sprintf("G_%s_k%s_m0.4", sh, k)),
+  "OS_logit_dropout_ph", "OS_comp_miscode_ph")
+
+subset_pool <- function(rows, ids) rows[rows$scenario_id %in% ids, ]
+
+# E2 (false-positive control, SAP v1.2 blockers 1/2/3):
+#   scene    = .pool_spec_e2 (truth_C none AND kappa 0, whitelist);
+#   non-green = ANY dimension, ANY layer: evaluation root flag OR positivity
+#             root flag OR extrapolation performance non-green OR
+#             extrapolation root flag (overall_level alone only aggregates
+#             extrapolation performance flags and is NOT sufficient);
+#   errors   = retained in the denominator as NOT flagged (frozen rule B3).
+#   Execution standard: PRESET CONSERVATIVE fixed thresholds (pooled
+#   n = 2000 -> rate <= 0.0866; per-cell n = 500 -> <= 0.072), which sit
+#   below the exact one-sided binomial 5% critical values (0.0885 / 0.076;
+#   actual alpha ~ 0.024). The exact binomial p-value is reported for
+#   reference only - it is NOT the execution standard.
+e2_any_nongreen <- function(rows) {
+  ng <- (!is.na(rows$eval_flag_codes) & nzchar(rows$eval_flag_codes)) |
+    (!is.na(rows$pos_flag_codes) & nzchar(rows$pos_flag_codes)) |
+    (!is.na(rows$pos_worst_level) & rows$pos_worst_level != "green") |
+    (!is.na(rows$ext_perf_level) & rows$ext_perf_level != "green") |
+    (!is.na(rows$ext_root_codes) & nzchar(rows$ext_root_codes))
+  ng[is.na(ng)] <- FALSE   # errored / missing rows count as not flagged
+  ng
+}
+
 e2_clean_scene_rate <- function(rows) {
-  clean <- !is_err(rows) & !rows$truth_C & rows$kappa == 0
-  ng <- !is.na(rows$overall_level) & rows$overall_level != "green"
-  n <- sum(clean); x <- sum(clean & ng)
+  d <- subset_pool(rows, .pool_spec_e2)
+  ng <- e2_any_nongreen(d)                     # errors stay in denominator
+  n <- nrow(d); x <- sum(ng)
   p_hat <- x / n
   pval <- tryCatch(
     stats::binom.test(x, n, p = 0.10, alternative = "less")$p.value,
     error = function(e) NA_real_)
   data.frame(n_clean = n, n_flagged = x, rate = p_hat,
-             exact_p_less_0.10 = pval,
-             pass_pooled_0866 = p_hat <= 0.0866)
+             exact_p_ref_only = pval,
+             pass_threshold_0866 = p_hat <= 0.0866)
 }
 
 # E3(iii): dataset-level OLS of KM bias on kappa with shape fixed effects,
