@@ -19,7 +19,7 @@ mg <- make_main_grid()
 pick <- c("G_ph_k0.0_m0.8", "G_ph_k0.6_m0.8", "G_late_k0.3_m0.4",
           "G_crossing_k0.6_m0.6")
 cells <- rbind(mg[mg$scenario_id %in% pick, ],
-               make_orthogonal_grid()[1:3, ])  # one of each mechanism (ph shape)
+               make_orthogonal_grid()[c(1, 5, 9), ])  # ph shape x 3 mechanisms
 
 runner <- make_rep_runner(horizon = 36)
 outdir <- file.path(pkg_root, "sim", "outputs", "pilot")

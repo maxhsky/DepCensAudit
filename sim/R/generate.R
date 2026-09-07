@@ -125,8 +125,8 @@ generate_scenario <- function(sc, n = 1000, seed = NULL) {
       # Frailty V accelerates failure and drives dropout; NOT a copula family.
       U1 <- pnorm(qnorm(U1) - 0.4 * V)          # frail patients fail earlier
     },
-    comp_miscode = ,                  # handled below via competing hazard
-    staggered   = ,                   # handled below via calendar time
+    comp_miscode = NULL,              # handled below via competing hazard
+    staggered   = NULL,               # handled below via calendar time
     stop("unknown injection: ", sc$injection))
 
   ## -- full event times --------------------------------------------------------
