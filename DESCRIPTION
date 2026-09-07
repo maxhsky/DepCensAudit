@@ -1,0 +1,37 @@
+Package: DepCensAudit
+Type: Package
+Title: Integrated Audit Framework for Censoring in Survival Data:
+    Evaluation, Positivity, and Extrapolation
+Version: 0.0.1
+Authors@R: person("Xinghua", "Ma", role = c("aut", "cre"),
+    email = "maxh_sky@126.com",
+    comment = "South China Agricultural University, Zhujiang College")
+Description: Phase A (engineering integration) of the DepCens-Audit
+    framework. Provides diagnostic audits for survival analyses with
+    censored data across three dimensions: (A) evaluation audit
+    (IPCW-based IBS under dependent censoring), (B) positivity audit
+    (continuous sensitivity intervals for the censoring mechanism), and
+    (C) extrapolation audit (three-model comparison, rho instability and
+    maturity criteria, and mapping to probabilistic sensitivity analysis
+    strategies for health technology assessment). Outputs are diagnostic
+    only; the package does not judge regulatory compliance. The
+    cross-dimensional interaction pathway is reserved as a frozen
+    interface for a later methodology release and is not implemented in
+    this version.
+License: MIT + file LICENSE
+URL: https://github.com/maxhsky/DepCensAudit
+BugReports: https://github.com/maxhsky/DepCensAudit/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends: R (>= 4.1.0)
+Imports:
+    survival,
+    stats,
+    utils
+Suggests:
+    flexsurv,
+    rmarkdown,
+    knitr,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

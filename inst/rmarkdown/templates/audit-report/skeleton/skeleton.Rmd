@@ -1,0 +1,105 @@
+---
+title: "DepCens-Audit Report"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+params:
+  audit: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+audit <- params$audit
+```
+
+## Scope and wording discipline
+
+This report is **diagnostic**: it describes how strongly the observed data
+constrain the analysis outputs. It does **not** judge regulatory compliance,
+and it does not make cross-dimensional performance claims (Phase A release).
+
+## Flags (two-layer report)
+
+```{r flags}
+fmt_flag <- function(f) {
+  data.frame(level = toupper(f$level), dimension = f$dimension,
+             layer = f$layer, code = f$code, message = f$message,
+             stringsAsFactors = FALSE)
+}
+root_flags <- if (inherits(audit, "depcens_audit")) audit$flags$root else audit$flags$root
+if (length(root_flags)) {
+  knitr::kable(do.call(rbind, lapply(root_flags, fmt_flag)))
+} else {
+  cat("No root-cause flags raised.\n")
+}
+```
+
+```{r perf}
+perf <- if (inherits(audit, "depcens_audit")) audit$flags$overall else audit$flags$performance[[1]]
+cat(sprintf("Overall performance flag: **[%s] %s**\n\n", toupper(perf$level), perf$code))
+cat(perf$message)
+```
+
+## PSA mapping
+
+```{r psa}
+psa <- audit$psa
+cat(sprintf("- strategy: `%s`\n", psa$strategy))
+cat(sprintf("- base case: %s\n", psa$base_case))
+cat(sprintf("- sampling: %s\n", psa$sampling))
+cat(sprintf("- sensitivity layer: %s\n\n", psa$sensitivity_layer))
+cat("Required reporting outputs:\n\n")
+for (r in psa$reporting) cat(sprintf("- %s\n", r))
+cat(sprintf("\n_Diagnostic wording_: %s\n", psa$diagnostic_wording))
+```
+
+## Dimension details
+
+```{r dims, results='asis'}
+dims <- if (inherits(audit, "depcens_audit")) audit$dimensions else list(audit)
+for (nm in names(dims)) {
+  cat(sprintf("\n### %s\n\n", nm))
+  d <- dims[[nm]]
+  if (inherits(d, "depcens_extrapolation_audit")) {
+    m <- d$metrics
+    knitr::kable(data.frame(
+      model = names(m$rmst_full),
+      rmst_full = signif(m$rmst_full, 4),
+      rmst_truncated_refit = signif(m$rmst_trunc, 4),
+      rho_instability = signif(m$rho_instability_per_model, 3)))
+    cat(sprintf(
+      paste0("\n\nrho instability (max): %.3f | rho maturity: %.3f | ",
+             "model disagreement: %.3f | truncation point t* = %.2f | ",
+             "horizon = %.1f | best model (AIC): %s\n"),
+      m$rho_instability, m$rho_maturity, m$model_disagreement,
+      m$t_star, m$horizon, m$best_model_by_aic))
+  } else if (inherits(d, "depcens_positivity_audit")) {
+    knitr::kable(d$sensitivity)
+    cat(sprintf("\n\nSensitivity interval for S(tau=%.3g): [%.3f, %.3f]\n",
+                d$tau, d$interval[1], d$interval[2]))
+    cat(sprintf("\n_%s_\n", d$meta$note))
+  } else if (inherits(d, "depcens_evaluation_audit")) {
+    cat(sprintf("\nIPCW IBS: %.4f\n", d$ibs))
+    knitr::kable(head(d$brier, 10))
+    cat(sprintf("\n_%s_\n", d$meta$status))
+  }
+}
+```
+
+## Reproducibility metadata
+
+```{r meta}
+meta <- audit$meta
+cat(sprintf("- audit time: %s\n", meta$audit_time))
+if (!is.null(meta$seed)) cat(sprintf("- seed: %s\n", meta$seed))
+if (!is.null(meta$config_version))
+  cat(sprintf("- threshold set version: %s\n", meta$config_version))
+if (!is.null(meta$data_fingerprint))
+  cat(sprintf("- input data fingerprint: %s\n", meta$data_fingerprint))
+cat(sprintf("- R version: %s\n", R.version.string))
+```
+
+```{r sessioninfo}
+utils::sessionInfo()
+```

@@ -1,0 +1,5 @@
+name: DepCens-Audit Report
+description: >
+  Diagnostic audit report (evaluation / positivity / extrapolation) with
+  two-layer flags, PSA mapping and reproducibility metadata.
+create_dir: false
