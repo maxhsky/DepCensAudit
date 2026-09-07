@@ -34,13 +34,17 @@ detect <- function(rows) {
                                                     "IMMATURE_DATA")),
     det_C_inst = !err & (grepl("INSTAB", rows$ext_root_codes) |
                            rows$ext_perf_code == "EXTRAP_INSTABILITY"),
-    det_B = !err & nzchar(rows$pos_flag_codes),
-    det_A = !err & rows$eval_weight_unstable == 1)
+    det_B = !err & (!is.na(rows$pos_flag_codes) & nzchar(rows$pos_flag_codes)),
+    det_A = !err & !is.na(rows$eval_weight_unstable) &
+      rows$eval_weight_unstable == 1)
 }
 
 # Per-scenario sensitivity / specificity for one dimension. Errors stay in
 # the denominator as non-detections (SAP B3). Dimension "C_mat" consumes
 # det_C_mat - the E1 PRIMARY judgement statistic (SAP v1.2 blocker 5).
+# NOTE: the truth_* columns are coarse grid booleans (e.g. truth_C =
+# maturity == 0.4), NOT the analytic grade; they are only valid inside
+# whitelist pools whose analytic grades are homogeneous (SAP v1.2 r2).
 sens_spec <- function(d, dimension = c("B", "C", "C_mat", "A")) {
   dimension <- match.arg(dimension)
   det <- switch(dimension, B = d$det_B, C = d$det_C,
@@ -79,16 +83,32 @@ subset_pool <- function(rows, ids) rows[rows$scenario_id %in% ids, ]
 
 # E2 (false-positive control, SAP v1.2 blockers 1/2/3):
 #   scene    = .pool_spec_e2 (truth_C none AND kappa 0, whitelist);
-#   non-green = ANY dimension, ANY layer: evaluation root flag OR positivity
-#             root flag OR extrapolation performance non-green OR
-#             extrapolation root flag (overall_level alone only aggregates
-#             extrapolation performance flags and is NOT sufficient);
-#   errors   = retained in the denominator as NOT flagged (frozen rule B3).
-#   Execution standard: PRESET CONSERVATIVE fixed thresholds (pooled
-#   n = 2000 -> rate <= 0.0866; per-cell n = 500 -> <= 0.072), which sit
-#   below the exact one-sided binomial 5% critical values (0.0885 / 0.076;
-#   actual alpha ~ 0.024). The exact binomial p-value is reported for
-#   reference only - it is NOT the execution standard.
+#   non-green = ANY dimension, ANY layer, evaluated over FIVE physical row
+#             columns (SAP v1.2 r2, verbatim enumeration):
+#             (1) eval_flag_codes non-empty
+#             (2) pos_flag_codes non-empty
+#             (3) pos_worst_level != "green"
+#             (4) ext_perf_level != "green"
+#             (5) ext_root_codes non-empty
+#             Equivalence note: dimension-A/B root flags are currently
+#             yellow-only, so flag existence <=> non-green. This equivalence
+#             is guaranteed by the recorder construction in runners.R
+#             (.flag_codes / .worst_level are derived from the same flag
+#             list); if the recorder changes, re-verify before readout.
+#             overall_level alone only aggregates extrapolation performance
+#             flags and must NOT be used alone for E2.
+#   errors   = retained in the denominator as NOT flagged (frozen rule B3;
+#             NOTE the asymmetry vs E1: for E2 this direction is
+#             anti-conservative - it eases passage - hence rate_valid and
+#             the 2% error-rate downgrade clause below).
+#   Execution standard: the PRESET CONSERVATIVE POOLED threshold is the
+#   ONLY execution standard (pooled n = 2000 -> rate <= 0.0866). Per-cell
+#   non-green rates are reported DESCRIPTIVELY with Wilson 95% CIs;
+#   0.072 is a per-cell reference bound only and is NOT a judgement
+#   criterion (SAP v1.2 r2 blocker B2). Exact binomial p-value: reference
+#   only. Downgrade clause: if the pooled error rate in the spec pool
+#   exceeds 2% (preset bound), E2 judgement downgrades to descriptive and
+#   any conclusion proceeds via a SAP amendment.
 e2_any_nongreen <- function(rows) {
   ng <- (!is.na(rows$eval_flag_codes) & nzchar(rows$eval_flag_codes)) |
     (!is.na(rows$pos_flag_codes) & nzchar(rows$pos_flag_codes)) |
@@ -101,15 +121,25 @@ e2_any_nongreen <- function(rows) {
 
 e2_clean_scene_rate <- function(rows) {
   d <- subset_pool(rows, .pool_spec_e2)
+  err <- is_err(d)
   ng <- e2_any_nongreen(d)                     # errors stay in denominator
   n <- nrow(d); x <- sum(ng)
   p_hat <- x / n
+  # Anti-conservative-direction safeguard (SAP v1.2 r2, B3 strengthening):
+  # errors ease E2 passage, so report the error-free rate alongside and
+  # downgrade to descriptive if pooled error rate exceeds the 2% bound.
+  valid <- !err
+  rate_valid <- if (any(valid)) sum(ng[valid]) / sum(valid) else NA_real_
+  error_rate <- mean(err)
   pval <- tryCatch(
     stats::binom.test(x, n, p = 0.10, alternative = "less")$p.value,
     error = function(e) NA_real_)
   data.frame(n_clean = n, n_flagged = x, rate = p_hat,
+             rate_valid_only = rate_valid, error_rate = error_rate,
              exact_p_ref_only = pval,
-             pass_threshold_0866 = p_hat <= 0.0866)
+             pass_threshold_0866 = p_hat <= 0.0866 && error_rate <= 0.02,
+             judgement_status = if (error_rate > 0.02)
+               "downgraded_descriptive_error_rate_gt_2pct" else "active")
 }
 
 # E3(iii): dataset-level OLS of KM bias on kappa with shape fixed effects,

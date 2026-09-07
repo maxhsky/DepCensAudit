@@ -21,9 +21,14 @@ fake <- data.frame(
   error = c("none", "none", "none", "none", "none", "flexsurv failed"),
   truth_C = FALSE, kappa = 0, stringsAsFactors = FALSE)
 res <- e2_clean_scene_rate(fake)
-stopifnot(res$n_clean == 6, res$n_flagged == 4)  # only rows 1,2 unflagged
+stopifnot(res$n_clean == 6, res$n_flagged == 4)  # rows 1 and 6 unflagged
+                                                  # (row 6 = errored, in denom)
+stopifnot(abs(res$rate_valid_only - 4/5) < 1e-12) # error-free rows only
+# 1/6 errors = 16.7% > 2% bound -> downgrade clause fires (by design)
+stopifnot(res$judgement_status == "downgraded_descriptive_error_rate_gt_2pct")
 cat("E2 OK: n =", res$n_clean, "| flagged =", res$n_flagged,
-    "| rate =", round(res$rate, 3), "| pass:", res$pass_threshold_0866, "\n")
+    "| rate =", round(res$rate, 3), "| rate_valid =",
+    round(res$rate_valid_only, 3), "| status:", res$judgement_status, "\n")
 
 # detect() + sens_spec C_mat dimension
 fake2 <- data.frame(
