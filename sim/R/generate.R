@@ -69,6 +69,29 @@ make_orthogonal_grid <- function(maturity = 0.6) {
   g
 }
 
+# Severe-maturity heterologous sublayer (SAP v1.1 open-point 4): closes the
+# decoupling gap for the strongest dimension-C claim, which was previously
+# validated only under same-family (copula) injection.
+#   * logit_dropout / comp_miscode x {ph, crossing} at m = 0.4:
+#     analytic theta_C: ph 0.519 (severe), crossing 0.444 (mild, boundary).
+#   * staggered is included for completeness but its calendar-time cutoff
+#     (median ~27 months) yields effective maturity between m0.6 and m0.8;
+#     those cells are characterisation-only and excluded from the severe
+#     sensitivity pool (documented in SAP section 3.1).
+make_orthogonal_severe_grid <- function() {
+  mech <- c("logit_dropout", "comp_miscode", "staggered")
+  g <- expand.grid(shape = c("ph", "crossing"), mechanism = mech)
+  g$kappa <- 0.3
+  g$maturity <- 0.4
+  g$injection <- as.character(g$mechanism)
+  g$scenario_id <- sprintf("OS_%s_%s", g$mechanism, g$shape)
+  g$truth_B <- TRUE
+  g$truth_C <- TRUE                    # m0.4 cells; graded levels via truth table
+  g$truth_A <- g$mechanism == "comp_miscode"
+  g$mechanism <- NULL
+  g
+}
+
 make_sensitivity_grid <- function() {
   g <- expand.grid(shape = shape_levels, kappa = c(0, 0.6))
   g$maturity <- 0.6
@@ -117,7 +140,12 @@ generate_scenario <- function(sc, n = 1000, seed = NULL) {
   V  <- rnorm(n)                      # unobserved prognostic frailty
   switch(sc$injection,
     gauss_copula = {
-      rho <- sin(pi * sc$kappa / 2)   # kappa = Kendall's tau -> normal rho
+      # rho = sin(pi*kappa/2) couples the latent uniforms with
+      # tau(U1, U2) = kappa; since T = -log(U1)/lambda is DECREASING in U1,
+      # the event/censoring-time dependence is tau(T, C) = -kappa exactly.
+      # Higher kappa: long survivors are censored earlier -> KM underestimates.
+      # Empirical check: kappa 0.3/0.6 -> tau -0.305/-0.599 (sign_check.R).
+      rho <- sin(pi * sc$kappa / 2)
       z1 <- qnorm(U1)
       U2 <- pnorm(rho * z1 + sqrt(1 - rho^2) * rnorm(n))
     },

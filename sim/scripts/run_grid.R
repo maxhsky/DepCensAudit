@@ -21,7 +21,8 @@ for (f in c("sim/R/generate.R", "sim/R/runners.R"))
   source(file.path(pkg_root, f), local = TRUE)
 library(DepCensAudit); library(survival)
 
-cells <- rbind(make_main_grid(), make_orthogonal_grid())
+cells <- rbind(make_main_grid(), make_orthogonal_grid(),
+               make_orthogonal_severe_grid())
 sens_cells <- make_sensitivity_grid()
 runner <- make_rep_runner(horizon = 36)
 

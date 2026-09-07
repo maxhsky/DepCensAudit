@@ -18,9 +18,13 @@
   paste(vapply(flags, function(f) f$code, character(1)), collapse = ";")
 }
 
+# Position-weighted rolling hash (31^i weights) of "scenario_id#rep":
+# anagram-safe, dependency-free, deterministic across sessions.
 .scenario_seed <- function(scenario_id, rep) {
-  hash <- sum(utf8ToInt(scenario_id)) * 2654435761 + rep * 40503
-  as.integer(hash %% .Machine$integer.max) + 1L
+  s <- as.integer(charToRaw(paste0(scenario_id, "#", rep)))
+  h <- 0
+  for (b in s) h <- (h * 31 + b) %% 2147483647
+  as.integer((h + rep * 2654435761) %% .Machine$integer.max) + 1L
 }
 
 # Cox-based prediction function fitted on the OBSERVED data (a realistic user
@@ -50,6 +54,7 @@ make_rep_runner <- function(horizon = 36) {
     if (is.null(seed)) seed <- .scenario_seed(sc$scenario_id, rep)
     base_row <- data.frame(
       scenario_id = sc$scenario_id, rep = rep, seed = seed, n = n,
+      pkg_version = as.character(utils::packageVersion("DepCensAudit")),
       shape = sc$shape, kappa = sc$kappa, maturity = sc$maturity,
       injection = sc$injection,
       truth_A = sc$truth_A, truth_B = sc$truth_B, truth_C = sc$truth_C,
@@ -91,6 +96,7 @@ make_rep_runner <- function(horizon = 36) {
         overall_level = audit$flags$overall$level,
         overall_code = audit$flags$overall$code,
         psa_strategy = audit$psa$strategy,
+        config_version = audit$meta$config_version,
         error = "none")
     }, error = function(e) {
       data.frame(event_rate = NA, cens_rate = NA, ibs = NA,
@@ -104,30 +110,35 @@ make_rep_runner <- function(horizon = 36) {
                  ext_perf_level = NA, ext_perf_code = "",
                  ext_root_codes = "", eval_flag_codes = "",
                  overall_level = NA, overall_code = "",
-                 psa_strategy = "", error = conditionMessage(e))
+                 psa_strategy = "", config_version = NA_character_,
+                 error = conditionMessage(e))
     })
     cbind(base_row, res)
   }
 }
 
-# Resumable batch: one CSV per scenario under outdir; appends missing reps.
+# Resumable batch: one CSV per scenario under outdir; appends missing reps in
+# chunks (default 25) so an interrupted run loses at most one chunk of work.
 run_batch <- function(cells, n_reps, n_subj, outdir, runner,
-                      verbose = TRUE) {
+                      verbose = TRUE, chunk = 25) {
   if (!dir.exists(outdir)) dir.create(outdir, recursive = TRUE)
   for (i in seq_len(nrow(cells))) {
     sc <- cells[i, ]
     f <- file.path(outdir, paste0(sc$scenario_id, ".csv"))
     done <- if (file.exists(f)) sum(count.fields(f, sep = ",")) - 1 else 0
     if (done >= n_reps) next
-    if (verbose) message(sprintf("[%d/%d] %s : reps %d-%d of %d",
-                                 i, nrow(cells), sc$scenario_id,
-                                 done + 1, n_reps, n_reps))
-    rows <- lapply((done + 1):n_reps, function(r)
-      runner(sc, n = n_subj, rep = r))
-    df <- do.call(rbind, rows)
-    utils::write.table(df, f, sep = ",", row.names = FALSE,
-                       col.names = done == 0, append = done > 0,
-                       qmethod = "double")
+    if (verbose && done == 0)
+      message(sprintf("[%d/%d] %s : starting", i, nrow(cells), sc$scenario_id))
+    while (done < n_reps) {
+      m <- min(chunk, n_reps - done)
+      rows <- lapply((done + 1):(done + m), function(r)
+        runner(sc, n = n_subj, rep = r))
+      df <- do.call(rbind, rows)
+      utils::write.table(df, f, sep = ",", row.names = FALSE,
+                         col.names = done == 0, append = done > 0,
+                         qmethod = "double")
+      done <- done + m
+    }
   }
   invisible(outdir)
 }
