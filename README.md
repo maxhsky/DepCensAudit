@@ -17,6 +17,40 @@ evaluation × positivity × extrapolation.
 > All outputs are **diagnostic** ("data support is insufficient to constrain
 > tail behaviour"), never adjudicative.
 
+## Quick example (NCCTG lung cohort)
+
+A fully reproducible three-dimension audit on `survival::lung` (n = 227,
+72.2% events, 3-year horizon, Cox model for the evaluation dimension):
+
+```r
+library(DepCensAudit)
+library(survival)
+
+d <- lung[complete.cases(lung[, c("time","status","age","sex","ph.ecog")]), ]
+d$event <- as.integer(d$status == 2)
+
+fit  <- coxph(Surv(time, event) ~ age + sex + ph.ecog, data = d)
+bh   <- basehaz(fit, centered = FALSE)
+beta <- coef(fit)
+pred_fun <- function(newdata, t0) {
+  s0 <- exp(-approx(bh$time, bh$hazard, xout = t0,
+                    method = "constant", rule = 2)$y)
+  mm <- model.matrix(~ age + sex + ph.ecog, data = newdata)[, -1, drop = FALSE]
+  s0^exp(as.numeric(mm %*% beta))
+}
+
+res <- depcens_audit(d, time, event,
+                     pred_fun = pred_fun, horizon = 365 * 3,
+                     seed = 20260908)
+render_audit_report(res, "html")
+```
+
+Real-data result (2026-09-08 run): evaluation GREEN, positivity
+**YELLOW** (`SPARSE_TAIL_RISKSET` — only 1.3% of subjects at risk in the
+final 10% of follow-up), extrapolation GREEN → PSA strategy
+`standard_tsd14`. Full script and rendered reports:
+[`inst/examples/`](inst/examples/).
+
 ## What it audits
 
 | Dimension | Function | Output | Basis |
