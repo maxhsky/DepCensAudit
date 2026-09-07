@@ -36,8 +36,16 @@ value is an error in this version.
 \strong{Wording discipline}: all outputs are diagnostic ("data support is
 insufficient to constrain tail behaviour"), never adjudicative.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/maxhsky/DepCensAudit}
+  \item Report bugs at \url{https://github.com/maxhsky/DepCensAudit/issues}
+}
+
+}
 \author{
-\strong{Maintainer}: Xinghua Ma \email{maxingh@example.edu.cn} (South China Agricultural University, Zhujiang College)
+\strong{Maintainer}: Xinghua Ma \email{maxh_sky@126.com} (South China Agricultural University, Zhujiang College)
 
 }
 \keyword{internal}

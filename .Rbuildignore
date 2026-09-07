@@ -1,2 +1,5 @@
 ^\.github$
 ^\.gitignore$
+^sim$
+^smoke_tmp\.R$
+^tmp_check\.R$

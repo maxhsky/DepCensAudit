@@ -8,7 +8,7 @@ audit_positivity(
   data,
   time,
   event,
-  kappa_grid = seq(0, 0.6, by = 0.2),
+  kappa_grid = seq(-0.6, 0.6, by = 0.2),
   tilting = c("risk", "time"),
   risk = NULL,
   tau = NULL,
